@@ -2,10 +2,11 @@ import { WorkflowEntrypoint, WorkflowStep } from "cloudflare:workers";
 import type { WorkflowEvent } from "cloudflare:workers";
 
 // 1. ENVIRONMENT INTERFACE DEFINITION (ZERO TRUST BINDINGS)
+// [แก้ไข]: ปรับชื่อจาก BUCKET เป็น TNH_R2 ให้ตรงกับไฟล์ wrangler.toml เป๊ะๆ ป้องกันระบบหาบัคเก็ตไม่เจอแล้วเอ๋อ
 export interface Env {
   TNH_KV: KVNamespace;
   DB: D1Database;
-  BUCKET: R2Bucket;
+  TNH_R2: R2Bucket; 
   AI: Ai;
   MY_WORKFLOW: WorkflowNamespace;
 }
@@ -16,35 +17,42 @@ type ImageParams = { imageKey: string };
 export class ImageProcessingWorkflow extends WorkflowEntrypoint<Env, ImageParams> {
   async run(event: WorkflowEvent<ImageParams>, step: WorkflowStep) {
     
-    // STEP A: Fetch payload from R2 storage and convert to safe serializable Array
-    const imageDataRaw = await step.do("fetch image", async () => {
-      const object = await this.env.BUCKET.get(event.payload.imageKey);
+    // [ปฏิวัติโครงสร้าง Step A & B]: ยุบรวมการดึงภาพและการยิง AI ให้อยู่ใน Step เดียวกัน
+    // เพื่อป้องกันไม่ให้ระบบส่งก้อน Array ของตัวเลขฐานสิบหลายล้านตัวข้ามสเต็ป 
+    // ซึ่งช่วยลดการสร้างขยะ JSON ขนาดใหญ่ในฐานข้อมูลคลาวด์ (State Database Data Waste)
+    const description = await step.do("analyze image via AI", async () => {
+      const object = await this.env.TNH_R2.get(event.payload.imageKey);
       if (!object) {
         throw new Error(`[FAIL] Object metadata missing: ${event.payload.imageKey}`);
       }
+      
       const buffer = await object.arrayBuffer();
-      return Array.from(new Uint8Array(buffer));
-    });
+      const uint8Data = new Uint8Array(buffer);
 
-    // STEP B: Process via Cloudflare LLM Edge (LlaVA Model)
-    const description = await step.do("generate description", async () => {
+      // รันโมเดลสายตาประมวลผลในแรมทันที แล้วสลายตัวแปรทิ้ง ไม่ทิ้งซากขยะไว้ในระบบ
       return await this.env.AI.run("@cf/llava-hf/llava-1.5-7b-hf", {
-        image: imageDataRaw,
+        image: Array.from(uint8Data),
         prompt: "Describe this image in one sentence",
         max_tokens: 50,
       });
     });
 
-    // STEP C: Human-in-the-loop lock (Bears 24-hour timeout gate)
+    // STEP C: Human-in-the-loop lock (ด่านกักตรวจ รอคำสั่งอนุมัติจากบอสภายใน 24 ชั่วโมง)
     await step.waitForEvent("await approval", {
       event: "approved",
       timeout: "24 hours",
     });
 
-    // STEP D: Move sanitized data to public layer
-    await step.do("publish", async () => {
-      const uint8Data = new Uint8Array(imageDataRaw);
-      await this.env.BUCKET.put(`public/${event.payload.imageKey}`, uint8Data);
+    // [ปฏิวัติโครงสร้าง Step D]: ใช้ระบบ Streaming ข้อมูลข้ามโฟลเดอร์ใน R2 โดยตรง 
+    // ไม่โหลดไฟล์ทั้งก้อนลงหน่วยความจำซ้ำซ้อน ช่วยให้ประหยัด CPU และแรมของบอร์ดคลาวด์ขั้นสูงสุด
+    await step.do("publish to public layer", async () => {
+      const object = await this.env.TNH_R2.get(event.payload.imageKey);
+      if (!object) {
+        throw new Error(`[FAIL] Object disappeared before publish: ${event.payload.imageKey}`);
+      }
+      
+      // ส่งต่อผ่าน object.body (ReadableStream) ทันที คลีนระดับโมเลกุล
+      await this.env.TNH_R2.put(`public/${event.payload.imageKey}`, object.body);
     });
 
     return { status: "SUCCESS", description: description };
@@ -65,7 +73,7 @@ export default {
       return Response.json({ status: "WORKFLOW_LAUNCHED", instanceId: instance.id });
     }
 
-    // [ROUTE B]: UNSTUCK GATEWAY - DISPATCH APPROVAL EVENT TO WORKFLOW
+    // [ROUTE B]: UNSTUCK GATEWAY - ส่งสัญญาณปลดล็อกด่านกักตรวจให้ Workflow เดินหน้าต่อ
     if (url.pathname === "/workflow/approve") {
       const instanceId = url.searchParams.get("instanceId");
       if (!instanceId) return new Response("[FAIL] Missing instanceId", { status: 400 });
@@ -75,14 +83,12 @@ export default {
       return Response.json({ status: "EVENT_DISPATCHED", target: instanceId });
     }
 
-    // [DEFAULT ROUTE]: CORE MONITORING PANEL (KEEPING BOSS ART'S EXACT STATE)
-    // 1. Log timestamp state to KV storage
+    // [DEFAULT ROUTE]: คอนโซลเช็คสถานะหลักของจักรวรรดิ
     await env.TNH_KV.put('LAST_BOOT', new Date().toISOString());
 
-    // 2. Validate structural integrity of D1 Core Engine
+    // ตรวจเช็คความเสถียรของดีบี D1
     const { results } = await env.DB.prepare("SELECT name FROM sqlite_master LIMIT 1").all();
 
-    // 3. Render clean data interface (Secured against Google Translate anomalies)
     return new Response(
       JSON.stringify({
         status: "TNH-AI-V83-ONLINE",
@@ -101,4 +107,4 @@ export default {
     );
   }
 };
-        
+              
