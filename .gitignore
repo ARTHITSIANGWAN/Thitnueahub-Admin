@@ -1,32 +1,48 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# 🌱 [TNH-AI-V83-TRINITY-EMPIRE | GITIGNORE HARDENING] 🫟
+
+# Binaries for Go
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
 coverage.*
 *.coverprofile
 profile.cov
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
+# Go Workspaces
 go.work
 go.work.sum
 
-# env file
-.env
+# --- TRINITY EMPIRE ADDITIONS ---
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Cloudflare Workers (Infrastructure Security)
+.wrangler/
+.dev.vars
+.mf/
+dist/
+build/
+
+# OS Metadata (System Hygiene)
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Editor/IDE Configs (Keep your environment private)
+.vscode/
+.idea/
+.project
+.classpath
+.settings/
+
+# Secret & Environment Files (Zero-Trust)
+.env
+.env.*
+*.secret
+*.key
+*.pem
+secrets/
+
+# 🫟 [TNH-AI-V83-TRINITY-EMPIRE | END] 🌱
