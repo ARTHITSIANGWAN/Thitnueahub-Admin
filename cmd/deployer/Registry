@@ -1,0 +1,26 @@
+package main
+
+import (
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"THITNUEAHUB-ADMIN/pkg/registry"
+)
+
+func main() {
+	outputDir := "docs/profiles"
+	os.MkdirAll(outputDir, 0755)
+
+	for id, agent := range registry.Registry {
+		fileName := filepath.Join(outputDir, fmt.Sprintf("%s_%s.md", id, agent.Name))
+		
+		err := registry.GenerateAgentProfile(agent, fileName)
+		if err != nil {
+			log.Printf("Failed to generate %s: %v", fileName, err)
+			continue
+		}
+		fmt.Printf("DEPLOYED: %s\n", fileName)
+	}
+	fmt.Println("🚀 11 Sovereigns Registered Successfully.")
+}
