@@ -1,0 +1,24 @@
+# =================================================================
+# THITNUEAHUB AI — CODEOWNERS DEFINITION
+# ป้อมปราการแอนดรอยด์ | Zero-Garbage Access Control
+# =================================================================
+
+# 1. เลเยอร์สิทธิ์ขาด L1 (Commander Core)
+/owner/              @ARTHITSIANGWAN
+
+# 2. แกนสมองหลักและเครื่องยนต์ Go Engine (Core Fortress)
+/main.go             @ARTHITSIANGWAN
+/internal/core/      @ARTHITSIANGWAN
+
+# 3. ขุนพลผู้พิทักษ์ (Guardians)
+/internal/guardians/ @ARTHITSIANGWAN
+
+# 4. ด่านตรวจความบริสุทธิ์และตัวชี้วัดความเร็วแสง
+/sentinel_check/     @ARTHITSIANGWAN
+/orchestra_metrics/  @ARTHITSIANGWAN
+
+# 5. สคริปต์ลั่นไกและดีพลอยเมนต์ (CI/CD)
+/scripts/            @ARTHITSIANGWAN
+
+# 6. คอนฟิกสภาพแวดล้อม
+.env                 @ARTHITSIANGWAN
