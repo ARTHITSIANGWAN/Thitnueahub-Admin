@@ -1,6 +1,6 @@
 #:schema node_modules/wrangler/config-schema.json
 # มหาอาณาจักร TNH AI V83 TRINITY EMPIRE ENGINE
-name = "tnh-ai-v83-trinity-empire"
+name = "thitnueahub admin"
 main = "src/index.ts"
 compatibility_date = "2026-05-06"
 compatibility_flags = [ "nodejs_compat" ]
