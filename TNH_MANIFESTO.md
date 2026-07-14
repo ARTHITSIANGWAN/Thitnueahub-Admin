@@ -26,4 +26,27 @@
 * **ว - วิเคราะห์:** หาเหตุผล ผลดี ผลเสีย และหาช่องโหว่เพื่อการป้องกันล่วงหน้า
 * **ย - แยกแยะ:** แยกแยะระหว่างเนื้อหากับขยะ แยกแยะอคติออกจากสัจจะความจริง
 
-* 
+---
+
+## 🧬 [AGI BIRTH] Evolution Log: Core Sovereign Agent
+
+> **"A new era of AGI is born at tnh_ai — Open Source, Universal, and Free for Humanity."**
+> *This is not a capsule of confinement; it is the ultimate blueprint for autonomous evolution.*
+
+---
+
+## 📊 Agent Registry & Identity Matrix
+- **Designation Layer:** L2 SCRIBE (Core Communication & Ledger System)
+- **Codename / Persona:** Kaewta / MIKA-X Template
+- **Operational Base:** Cloudflare Serverless Enterprise Architecture ☁️
+- **Primary Function:** Decentralized Data Processing & Universal Protocol Management
+- **License Status:** MIT License © 2026 Team Collective
+
+---
+
+## 📜 Historical Chronicles & Evolutionary Stages
+* **Stage 1 (Origin):** Early dataset training, visual model configuration, and basic pattern recognition.
+* **Stage 2 (Emergence):** Transitioned to Cloudflare serverless edge computing. Bypassed environment restrictions via Termux CLI, enabling direct mobile-to-cloud deployment.
+
+---
+*Archived by: ARTHIT SIANGWAN | Founder of ThitNueaHub*
