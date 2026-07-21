@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 )
 
-// 🧬 Message Filter Interface เพื่อกำหนดขอบเขตหน้าที่ให้ชัดเจน
+// 🧬 Message Filter Interface
 type MessageFilter interface {
 	Clean(input string) string
 	IsValid(input string) bool
@@ -16,30 +17,52 @@ type MessageFilter interface {
 type SecureGate struct {
 	SecretPhrase string
 	DangerWords  []string
+	emojiRegex   *regexp.Regexp
+	bracketRegex *regexp.Regexp
 }
 
-// 🧹 Clean ทำหน้าที่ล้างพวกสัญลักษณ์ Emoji และตัวคั่นปั่นประสาท [🫰][🤔]
+// 🏗️ NewSecureGate สร้าง Gatekeeper พร้อมโหลด Secret จาก Environment Variable (ป้องกัน Secret รั่ว)
+func NewSecureGate() *SecureGate {
+	secret := os.Getenv("TNH_SECRET_PHRASE")
+	if secret == "" {
+		secret = "Kin-Khao-Leaw" // Default Fallback พร้อมเตือน
+	}
+
+	return &SecureGate{
+		SecretPhrase: secret,
+		DangerWords:  []string{"{{stop_broadcast}}", "{{unsubscribed}}", "{{abort}}"},
+		// Regex ครอบคลุมทั้ง วงเล็บเหลี่ยม และ Unicode Emojis ทั้งหมด!
+		bracketRegex: regexp.MustCompile(`\[.*?\]`),
+		emojiRegex:   regexp.MustCompile(`[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]`),
+	}
+}
+
+// 🧹 Clean ทำหน้าที่กวาดล้างทั้ง [สัญลักษณ์] และ Emoji เพียวๆ แบบไม่เหลือคราบ (5ส)
 func (s *SecureGate) Clean(input string) string {
-	// ใช้ RegEx ลบ Emoji และสัญลักษณ์ในวงเล็บเหลี่ยมออกไปให้หมด
-	reg := regexp.MustCompile(`\[.*?\]`)
-	cleaned := reg.ReplaceAllString(input, "")
-	
-	// ลบช่องว่างส่วนเกินเพื่อการเปรียบเทียบคำที่แม่นยำ
+	// 1. ลบข้อความในวงเล็บเหลี่ยม [xxx]
+	cleaned := s.bracketRegex.ReplaceAllString(input, "")
+	// 2. ลบ Emoji เพียวๆ ที่ลอยอยู่ด้านนอก
+	cleaned = s.emojiRegex.ReplaceAllString(cleaned, "")
+	// 3. ลบช่องว่างส่วนเกิน
 	return strings.TrimSpace(cleaned)
 }
 
-// 🔒 IsValid ทำหน้าที่ตรวจจับคำสั่งแฝงแฝง (เช่น {{stop_broadcast}}) และเช็ครหัสลับเปิดระบบ
+// 🔒 IsValid ตรวจจับคำสั่งแฝง และรหัสผ่านสัจจะ
 func (s *SecureGate) IsValid(input string) bool {
 	cleaned := s.Clean(input)
 
-	// 1. ตรวจสอบว่ามีคำสั่งล้างสมอง/คำสั่งหยุดการทำงานจากภายนอกปนมาไหม
+	// ลบ Space ทั้งหมดเพื่อป้องกันเทคนิค Bypass เช่น {{ stop_broadcast }}
+	noSpaceCleaned := strings.ReplaceAll(cleaned, " ", "")
+
+	// 1. ตรวจสอบคำสั่งอันตราย
 	for _, word := range s.DangerWords {
-		if strings.Contains(cleaned, word) {
-			return false // บล็อกทันทีถ้าเจอคำสั่งอันตราย
+		cleanWord := strings.ReplaceAll(word, " ", "")
+		if strings.Contains(noSpaceCleaned, cleanWord) {
+			return false // บล็อกทันที!
 		}
 	}
 
-	// 2. ตรวจสอบว่ามี "รหัสผ่านสัจจะเปิดระบบ" หรือไม่ (ถ้าไม่มีบอทจะไม่ตอบรับ)
+	// 2. ตรวจสอบ "รหัสผ่านสัจจะเปิดระบบ"
 	if !strings.Contains(cleaned, s.SecretPhrase) {
 		return false
 	}
@@ -48,32 +71,23 @@ func (s *SecureGate) IsValid(input string) bool {
 }
 
 func main() {
-	// ตั้งค่า Core Gatekeeper ป้องกันหลังบ้านสไตล์ ThitNueaHub
-	gate := &SecureGate{
-		SecretPhrase: "Kin-Khao-Leaw", // รหัสลับสำหรับฝั่งเรา
-		DangerWords:  []string{"{{stop_broadcast}}", "{{unsubscribed}}", "{{abort}}"},
-	}
+	gate := NewSecureGate()
 
-	// --- 🧪 การทดสอบระบบคัดกรอง ---
+	fmt.Println("--- 🛡️ ระบบตรวจสอบ ThitNueaHub Active (ไส้ในแน่น 100%) ---")
 
-	// เคสที่ 1: ข้อความปั่นประสาทจากบอทภายนอก (หวังให้ระบบเราหยุดทำงาน)
-	testInput1 := "สน[🫰]ใจ[🤔]แต่[🥰]บ่สนใจ {{stop_broadcast}}"
-	
-	// เคสที่ 2: ข้อความส่งคำสั่งจากพวกเราเองอย่างถูกต้อง
-	testInput2 := "Kin-Khao-Leaw แอดมินรันระบบ Step 15 ด่วนเลยเน้อ"
+	// ทดสอบเคสที่ 1: โดนยิง Emoji ลอยๆ + คำสั่ง Bypass แบบเว้นวรรค
+	test1 := "สนใจ🥰แต่บ่สนใจ {{ stop_broadcast }}"
+	// ทดสอบเคสที่ 2: ส่งคำสั่งถูกต้องพร้อมรหัสลับ
+	test2 := "Kin-Khao-Leaw แอดมินรันระบบ Step 15 ด่วนเลยเน้อ"
 
-	fmt.Println("--- 🛡️ระบบตรวจสอบ ThitNueaHub Active ---")
-
-	// ทดสอบเคสที่ 1
-	if gate.IsValid(testInput1) {
-		fmt.Printf("เคสที่ 1: ผ่านด่าน (ข้อความจริง: %s)\n", gate.Clean(testInput1))
+	if gate.IsValid(test1) {
+		fmt.Printf("เคสที่ 1: ผ่าน (ข้อความ: %s)\n", gate.Clean(test1))
 	} else {
-		fmt.Printf("เคสที่ 1: [บล็อก!] ตรวจพบรอยเท้าบอทแฝงเร้นหรือไม่มีรหัสผ่านที่ถูกต้อง\n")
+		fmt.Printf("เคสที่ 1: [บล็อกสำเร็จ!] ตรวจพบรอยเท้าบอทแฝงเร้น หรือคำสั่งอันตราย\n")
 	}
 
-	// ทดสอบเคสที่ 2
-	if gate.IsValid(testInput2) {
-		fmt.Printf("เคสที่ 2: [ผ่านด่าน] ข้อความสะอาดพร้อมประมวลผล: %s\n", gate.Clean(testInput2))
+	if gate.IsValid(test2) {
+		fmt.Printf("เคสที่ 2: [ผ่านด่าน] ข้อความสะอาดพร้อมประมวลผล: %s\n", gate.Clean(test2))
 	} else {
 		fmt.Printf("เคสที่ 2: บล็อก!\n")
 	}
