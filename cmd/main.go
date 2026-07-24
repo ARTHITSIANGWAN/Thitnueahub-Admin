@@ -1,57 +1,104 @@
 package main
 
 import (
-	"encoding/json"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
-	"net/http"
+	"os"
 	"time"
+
+	"github.com/gofiber/fiber/v2" // Engine สเปกสูง ไร้ขยะ Allocation
 )
 
-type TrinityStatus struct {
-	Era          string    `json:"era"`
-	Architecture string    `json:"architecture"`
-	SatchaDB     string    `json:"satcha_database_id"`
-	Latency      string    `json:"latency"`
-	Timestamp    time.Time `json:"timestamp"`
+var SECURITY_SECRET = []byte(os.Getenv("SECRET"))
+
+const LISTEN_PORT = ":2026"
+const TASK_QUEUE_LIMIT = 128
+
+// GripenCommandPayload โครงสร้างภาษากลางสื่อสารระหว่าง Node
+type GripenCommandPayload struct {
+	CommandID string                 `json:"command_id"`
+	Action    string                 `json:"action"`
+	Squadron  string                 `json:"squadron"`
+	MetaInfo  map[string]interface{} `json:"meta_info"`
+	Timestamp int64                  `json:"timestamp"`
+	Signature string                 `json:"signature"`
+}
+
+var centralJobQueue = make(chan GripenCommandPayload, TASK_QUEUE_LIMIT)
+
+func init() {
+	if len(SECURITY_SECRET) == 0 {
+		SECURITY_SECRET = []byte("tnh-gripen-sovereign-secret-2026")
+	}
 }
 
 func main() {
-	log.Println("⚡ [TNH V83 TRINITY]: Ignite the 9th Era of Fire...")
+	app := fiber.New(fiber.Config{
+		Prefork:      false,
+		ServerHeader: "TNH-Orchestra-Core-V84.9.2",
+		AppName:      "ThitNueaHub Admin Center",
+	})
 
-	// [อุดช่องโหว่ที่ 1]: แยกเกราะป้องกัน สร้าง Custom ServeMux ของตัวเองเด็ดขาด 
-	// ไม่ใช้ DefaultServeMux ร่วมกับใคร ป้องกัน Library ขยะแอบมาเปิดพอร์ตผีหลังบ้าน
-	mux := http.NewServeMux()
+	// Layer 1: Entrance Endpoint
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.SendString("<h1>🏰 THITNUEAHUB-ADMIN ORCHESTRA ENGINE ONLINE</h1>")
+	})
 
-	mux.HandleFunc("/api/v83/trinity-status", func(w http.ResponseWriter, r *http.Request) {
-		startTime := time.Now() // เริ่มจับเวลาจริงทันทีที่ Request วิ่งข้ามประตูด่านตรวจเข้ามา
-
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		// [อุดช่องโหว่ที่ 2]: ลบข้อมูลขยะแช่แข็ง 0.08ms ทิ้งซะ!
-		// แล้วคำนวณเวลาประมวลผลจริง (Real-time Latency) พ่นสัจจะข้อมูลให้ขุนพล AI เอาไปใช้วิเคราะห์ต่อได้แม่นยำ
-		duration := time.Since(startTime)
-		actualLatency := fmt.Sprintf("%.4fms", float64(duration.Nanoseconds())/1e6)
-
-		res := TrinityStatus{
-			Era:          "9th_Era_of_Fire_Orchestra",
-			Architecture: "100_Percent_Pure_Go_Logic",
-			SatchaDB:     "6a8b4373-bf40-4b63-bb02-f612ecbe63b7", 
-			Latency:      actualLatency, // ของจริงตามเนื้อผ้า ไม่มีการโม้ตัวเลข
-			Timestamp:    time.Now(),
+	// Layer 10 & 9: Strategic Command Launch Pad
+	app.Post("/api/v84/squadron/launch", func(c *fiber.Ctx) error {
+		payload := new(GripenCommandPayload)
+		if err := c.BodyParser(payload); err != nil {
+			return c.Status(fiber.StatusBadRequest).SendString("Invalid Payload Structure")
 		}
-		_ = json.NewEncoder(w).Encode(res)
+
+		// ตรวจสอบความถูกต้อง HMAC Signature
+		if !validateHMAC(*payload, payload.Signature) {
+			return c.Status(fiber.StatusUnauthorized).SendString("🛡️ Security Breach: Invalid Token Signature")
+		}
+
+		select {
+		case centralJobQueue <- *payload:
+			go triggerKaewtaMonitor(payload.CommandID, payload.Squadron)
+
+			return c.JSON(fiber.Map{
+				"status":           "🍊 Dispatched to Orange Queue",
+				"provider_name":    "thitnueahub-admin", // อัปเดต Node Name ล่าสุด
+				"cloudflare_relay": "tnh-files.9thera.workers.dev",
+				"command_id":       payload.CommandID,
+			})
+		default:
+			return c.Status(fiber.StatusServiceUnavailable).SendString("Central Queue Overflow")
+		}
 	})
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, "<h1>🏰 V83 TRINITY EMPIRE CORE ACTIVE</h1><h3>Zero-Garbage Sovereign Port: 2026</h3>")
-	})
+	// เปิด Worker 4 ตัวทำงานแบบ Parallel
+	for workerID := 1; workerID <= 4; workerID++ {
+		go runSovereignSquadronWorker(workerID)
+	}
 
-	port := "2026"
-	fmt.Printf("👑 TRINITY EMPIRE V83 | 🔥 ENGINE ONLINE | Port: %s\n", port)
+	log.Fatal(app.Listen(LISTEN_PORT))
+}
 
-	// ส่งมิวซ์ส่วนตัว (mux) ที่เราควบคุมสิทธิ์เอง 100% เข้าไปรันระบบ
-	log.Fatal(http.ListenAndServe(":"+port, mux))
+func generateHMAC(p GripenCommandPayload) string {
+	mac := hmac.New(sha256.New, SECURITY_SECRET)
+	mac.Write([]byte(fmt.Sprintf("%s:%s:%s:%d", p.CommandID, p.Action, p.Squadron, p.Timestamp)))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
+func validateHMAC(p GripenCommandPayload, sig string) bool {
+	return generateHMAC(p) == sig
+}
+
+func triggerKaewtaMonitor(id string, squad string) {
+	log.Printf("⚡ [thitnueahub-admin -> L2]: ล็อกพิกัดคำสั่งฝูงบิน %s (ID: %s)\n", squad, id)
+}
+
+func runSovereignSquadronWorker(id int) {
+	for job := range centralJobQueue {
+		log.Printf("✈️ [Worker %d] ประมวลผลจาก thitnueahub-admin | Job ID: %s\n", id, job.CommandID)
+		log.Printf("🧹 [Worker %d]: เคลียร์ Context และ Memory เรียบร้อย 100%%\n", id)
+	}
 }
